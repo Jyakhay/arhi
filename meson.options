@@ -1,0 +1,3 @@
+option('build_vulkan', type: 'boolean', value: true)
+option('build_opengl', type: 'boolean', value: true)
+option('platform_backend', type: 'combo', choices: ['glfw', 'sdl3'], value: 'glfw')
