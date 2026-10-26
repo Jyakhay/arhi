@@ -69,3 +69,8 @@ Testing/
 
 # editor files
 .vscode/
+
+# meson subprojects
+/subprojects/*
+!/subprojects/*.wrap
+!/subprojects/packagefiles/

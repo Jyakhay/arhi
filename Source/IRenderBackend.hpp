@@ -25,9 +25,9 @@ namespace arhi
         virtual CShaderResource AllocShaderModule(EShaderModuleStage eStage) = 0;
 
         /*--------Update Commands--------*/
-        virtual void UpdateBuffer(const CBufferResource& cResource, uint32_t nOffset, uint32_t nSize, void* pCopyData);
-        virtual void UpdateTexture(const CTextureResource& cResource, const STextureOffset& cOffset, const STextureSize& cDataSize, std::span<unsigned char> cData);
-        virtual void UpdateShaderModule(const CShaderResource& cResource, std::span<char> cData);
+        virtual void UpdateBuffer(const CBufferResource& cResource, uint32_t nOffset, uint32_t nSize, void* pCopyData) = 0;
+        virtual void UpdateTexture(const CTextureResource& cResource, const STextureOffset& cOffset, const STextureSize& cDataSize, std::span<unsigned char> cData) = 0;
+        virtual void UpdateShaderModule(const CShaderResource& cResource, std::span<char> cData) = 0;
 
         /*--------Destroy Commands--------*/
         virtual void DestroyBuffer(CBufferResource* pResource) = 0;
