@@ -3,6 +3,7 @@
 #include <span>
 #include <cstdint>
 
+#include "PlatformBackend.hpp"
 #include "Types.hpp"
 
 namespace arhi
@@ -14,8 +15,28 @@ namespace arhi
 
         virtual ~IRenderBackend() = default;
 
+        template<class T>
+        static IRenderBackend* CreateBackend()
+        {
+            if(pInstance)
+            {
+                return pInstance;
+            }
+
+            pInstance = new T();
+            return pInstance;
+        }
+
+        static IRenderBackend* Get()
+        {
+            return pInstance;
+        }
+
         virtual bool Initialize() = 0;
         virtual void Shutdown() = 0;
+
+        virtual void RegisterWindow(PlatformWindowType* Window) = 0;
+        virtual void DeregisterWindow(PlatformWindowType* Window) = 0;
 
         virtual void ExecuteFrame() = 0;
         
@@ -36,6 +57,10 @@ namespace arhi
 
         /*--------Backend Info--------*/
         virtual const char* GetBackendName() = 0;
+
+    private:
+
+        static inline IRenderBackend* pInstance = nullptr;
 
     };
 }

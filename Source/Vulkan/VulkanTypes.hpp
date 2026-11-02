@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <vector>
+#include "PlatformBackend.hpp"
 #include "VulkanFeatures.hpp"
 #include <vulkan/vulkan.h>
 
@@ -45,7 +46,23 @@ namespace arhi::vulkan
         SDeviceFeatureSupportInfo cFeatureSupport;
     };
 
-    struct SVulkanContext
+    struct SSwapchain
+    {
+        std::vector<VkImage> cImages;
+        std::vector<VkImageView> cViews;
+        VkSwapchainKHR cObject;
+        VkFormat eFormat;
+        VkExtent2D cExtent;
+    };
+
+    struct SWindow
+    {
+        SSwapchain cSwapchain;
+        PlatformWindowType* pWindow = nullptr;
+        VkSurfaceKHR cSurface = nullptr;
+    };
+
+    struct SContext
     {
 
         uint32_t nAPIVersion = 0;
@@ -55,6 +72,7 @@ namespace arhi::vulkan
         VkDevice cDevice = nullptr;
         VkQueue cGQueue = nullptr;
         uint32_t nGQueueIndex = 0;
+        std::vector<SWindow> cWindowList;
 
     };  
 

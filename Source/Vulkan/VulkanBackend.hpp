@@ -1,9 +1,10 @@
 #pragma once
 
 #include "IRenderBackend.hpp"
+#include "PlatformBackend.hpp"
 #include "VulkanFeatures.hpp"
 #include "VulkanTypes.hpp"
-#include <array>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -16,6 +17,9 @@ namespace arhi
 
         virtual bool Initialize() override;
         virtual void Shutdown() override;
+
+        void RegisterWindow(PlatformWindowType* Window) override;
+        void DeregisterWindow(PlatformWindowType* Window) override;
 
         virtual void ExecuteFrame() override;
         
@@ -44,6 +48,7 @@ namespace arhi
         bool SelectPhysicalDevice();
         bool SelectGraphicsQueueFamily();
         bool CreateVulkanDevice();
+        std::optional<vulkan::SSwapchain> CreateSwapchain(vulkan::SWindow& Window);
 
         /*--------Helper Functions--------*/
         static void GetDeviceExtensionSupport(VkPhysicalDevice cDevice, std::span<const char*> cExtensions, vulkan::SDeviceExtensionSupportInfo* pOutSupportInfo);
@@ -51,13 +56,15 @@ namespace arhi
         void GetDeviceEnabledFeatures(vulkan::SEnabledDeviceFeatureInfo* OutEnabledFeatures);
         static bool DoesDeviceSupportFormat(VkPhysicalDevice cDevice, VkFormat eFormat);
 
+        bool IsWindowRegistered(PlatformWindowType* Window) const;
+
         /*--------Vulkan Callbacks--------*/
 
         static uint32_t vkDebugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT eSeverity, VkDebugUtilsMessageTypeFlagsEXT eTypes, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
         static VkResult vkCreateDebugUtilsMessengerEXT(VkInstance cInstance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pMessenger);
 
         /*--------Vulkan Setup--------*/
-        vulkan::SVulkanContext cContext;
+        vulkan::SContext cContext;
         std::vector<const char*> cDeviceExtensions = 
         {
             VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,

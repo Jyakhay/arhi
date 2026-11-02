@@ -14,6 +14,7 @@
         #define PlatformCreateSurface(Instance, Window, Allocator, OutSurface) glfwCreateWindowSurface(Instance, Window, Allocator, OutSurface) == VK_SUCCESS
     #endif
 
+    #define PlatformGetFramebufferSize(Window, OutW, OutH) glfwGetFramebufferSize(Window, OutW, OutH) 
     #define PlatformWindowType GLFWwindow
 
 #endif
@@ -28,7 +29,7 @@
         #define PlatformIsVulkanSupported SDL_Vulkan_LoadLibrary(NULL) == 0
         #define PlatformGetInstanceExtensions(OutCount) SDL_Vulkan_GetInstanceExtensions(OutCount)
         #define PlatformCreateSurface(Instance, Window, Allocator, OutSurface) SDL_Vulkan_CreateSurface(Window, Instance, Allocator, OutSurface)
-        #define PlatformDestroySurface glfwCreateWindowSurface
+        #define PlatformGetFramebufferSize(Window, OutW, OutH) SDL_Vulkan_GetDrawableSize(Window, OutW, OutH) 
     #endif
 
     #define PlatformWindowType SDL_Window
