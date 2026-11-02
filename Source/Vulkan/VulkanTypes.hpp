@@ -2,9 +2,12 @@
 
 #include <cstdint>
 #include <vector>
+#include <vulkan/vulkan.h>
+#include <ThirdParty/vk_mem_alloc.h>
+
+#include "Types.hpp"
 #include "PlatformBackend.hpp"
 #include "VulkanFeatures.hpp"
-#include <vulkan/vulkan.h>
 
 namespace arhi::vulkan
 {
@@ -46,6 +49,15 @@ namespace arhi::vulkan
         SDeviceFeatureSupportInfo cFeatureSupport;
     };
 
+    struct SBuffer
+    {
+        uint32_t nSize = 0;
+        EBufferFlags::Type eFlags = 0;
+        VkBuffer cObject = nullptr;
+        VmaAllocation cAllocation = nullptr;
+        VmaAllocationInfo cAllocInfo;
+    };
+
     struct SSwapchain
     {
         std::vector<VkImage> cImages;
@@ -73,6 +85,7 @@ namespace arhi::vulkan
         VkQueue cGQueue = nullptr;
         uint32_t nGQueueIndex = 0;
         std::vector<SWindow> cWindowList;
+        VmaAllocator cAllocator = nullptr;
 
     };  
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace arhi
@@ -48,7 +49,12 @@ namespace arhi
     {
         enum
         {
-            None = 0
+            None = 0,
+            Vertex = 1 << 0,
+            Index = 1 << 1,
+            Source = 1 << 2,
+            Dest = 1 << 3,
+            Uniform = 1 << 4
         };
 
         typedef int Type;
@@ -73,6 +79,13 @@ namespace arhi
 
     public:
 
+        CRenderResource() = default;
+
+        CRenderResource(void* pResource, EResourceType eResourceType) 
+        : pResource(pResource), eResourceType(eResourceType) {}
+
+        CRenderResource(std::nullptr_t){}
+
         void* GetInternalResource() const
         {
             return pResource;
@@ -88,18 +101,29 @@ namespace arhi
         {
             return static_cast<T*>(pResource);
         }
- 
-    private:
 
-        void* pResource;
+        operator bool() const
+        {
+            return pResource;
+        }
+ 
+    protected:
+
+        void* pResource = nullptr;
         EResourceType eResourceType;
 
     };
 
-    class CBufferResource : CRenderResource
+    class CBufferResource : public CRenderResource
     {
 
     public:
+
+        CBufferResource() = default;
+        CBufferResource(void* pResource, uint32_t nAllocSize) 
+        : CRenderResource(pResource, EResourceType::Buffer), nAllocSize(nAllocSize) {}
+
+        CBufferResource(std::nullptr_t){};
 
         uint32_t GetAllocatedSize() const
         {
@@ -112,7 +136,7 @@ namespace arhi
 
     };
 
-    class CTextureResource : CRenderResource
+    class CTextureResource : public CRenderResource
     {
 
     public:
@@ -134,7 +158,7 @@ namespace arhi
 
     };
 
-    class CShaderResource : CRenderResource
+    class CShaderResource : public CRenderResource
     {
 
     public:

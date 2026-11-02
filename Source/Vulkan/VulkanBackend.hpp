@@ -2,8 +2,11 @@
 
 #include "IRenderBackend.hpp"
 #include "PlatformBackend.hpp"
+#include "Types.hpp"
 #include "VulkanFeatures.hpp"
 #include "VulkanTypes.hpp"
+#include "vulkan/vulkan_core.h"
+
 #include <optional>
 #include <span>
 #include <vector>
@@ -49,12 +52,14 @@ namespace arhi
         bool SelectGraphicsQueueFamily();
         bool CreateVulkanDevice();
         std::optional<vulkan::SSwapchain> CreateSwapchain(vulkan::SWindow& Window);
+        bool CreateAllocator();
 
         /*--------Helper Functions--------*/
         static void GetDeviceExtensionSupport(VkPhysicalDevice cDevice, std::span<const char*> cExtensions, vulkan::SDeviceExtensionSupportInfo* pOutSupportInfo);
         static void GetDeviceFeatureSupport(VkPhysicalDevice cDevice, vulkan::SDeviceFeatureRequest& cRequestFeatures, vulkan::SDeviceFeatureSupportInfo* pOutSupportInfo);
         void GetDeviceEnabledFeatures(vulkan::SEnabledDeviceFeatureInfo* OutEnabledFeatures);
         static bool DoesDeviceSupportFormat(VkPhysicalDevice cDevice, VkFormat eFormat);
+        static VkBufferUsageFlags GetBufferUsageFlags(EBufferFlags::Type eFlags);
 
         bool IsWindowRegistered(PlatformWindowType* Window) const;
 

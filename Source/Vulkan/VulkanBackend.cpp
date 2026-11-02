@@ -1,6 +1,7 @@
 #include "VulkanBackend.hpp"
 #include "GLFW/glfw3.h"
 #include "PlatformBackend.hpp"
+#include "Types.hpp"
 #include "VulkanTypes.hpp"
 #include "vulkan/vulkan_core.h"
 
@@ -8,7 +9,9 @@
 #include <vector>
 #include <array>
 #include <cstring>
-#include <vulkan/vulkan.h>
+
+#define VMA_IMPLEMENTATION
+#include <ThirdParty/vk_mem_alloc.h>
 
 namespace arhi
 {
@@ -30,12 +33,18 @@ namespace arhi
         }
 
         InstanceExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
         if(!CreateVulkanInstance(InstanceExtensions))
         {
             return false;
         }
 
         if(!SelectPhysicalDevice() || !SelectGraphicsQueueFamily() || !CreateVulkanDevice())
+        {
+            return false;
+        }
+
+        if(!CreateAllocator())
         {
             return false;
         }
@@ -87,7 +96,50 @@ namespace arhi
 
     CBufferResource CVulkanBackend::AllocBuffer(uint32_t nSize, EBufferFlags::Type eFlags) 
     {
-        return {};
+        if(nSize == 0)
+        {
+            return nullptr;
+        }
+
+        vulkan::SBuffer* NewBuffer = new vulkan::SBuffer();
+        VkBufferUsageFlags UsageFlags = GetBufferUsageFlags(eFlags);
+
+        VkBufferCreateInfo BufferInfo
+        {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .size = static_cast<uint32_t>(nSize),
+            .usage = UsageFlags,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 0,
+            .pQueueFamilyIndices = nullptr
+        };
+
+        VmaAllocationCreateInfo AllocInfo
+        {
+            .flags = 0,
+            .usage = VMA_MEMORY_USAGE_AUTO,
+            .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .preferredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            .memoryTypeBits = 0,
+            .pool = nullptr,
+            .pUserData = NewBuffer,
+            .priority = 0.0f,
+            .minAlignment = 0
+        };
+
+        if(vmaCreateBuffer(cContext.cAllocator, &BufferInfo,
+             &AllocInfo, &NewBuffer->cObject,
+              &NewBuffer->cAllocation, &NewBuffer->cAllocInfo) != VK_SUCCESS)
+        {
+          return nullptr;
+        }
+
+        NewBuffer->nSize = nSize;
+        NewBuffer->eFlags = eFlags;
+
+        return {NewBuffer, NewBuffer->nSize};
     }
 
     CTextureResource CVulkanBackend::AllocTexture(ETextureDimensions eDimensions, ETextureFormat eFormat, const STextureSize &cSize, uint32_t nMips) 
@@ -116,7 +168,16 @@ namespace arhi
                                             
     void CVulkanBackend::DestroyBuffer(CBufferResource *pResource) 
     {
+        if(!pResource || !pResource->GetInternalResource())
+        {
+            return;
+        }
 
+        vulkan::SBuffer* Buffer = pResource->CastTo<vulkan::SBuffer>();
+        vmaDestroyBuffer(cContext.cAllocator, Buffer->cObject, Buffer->cAllocation);
+
+        delete Buffer;
+        *pResource = nullptr;
     }
 
     void CVulkanBackend::DestroyTexture(CTextureResource *pResource) 
@@ -359,8 +420,8 @@ namespace arhi
             .imageArrayLayers = 1,
             .imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
             .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .queueFamilyIndexCount = 1,
-            .pQueueFamilyIndices = &cContext.nGQueueIndex,
+            .queueFamilyIndexCount = 0,
+            .pQueueFamilyIndices = nullptr,
             .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
             .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
             .presentMode = VK_PRESENT_MODE_FIFO_KHR,
@@ -413,6 +474,31 @@ namespace arhi
         ReturnValue.eFormat = SwapchainCreateInfo.imageFormat;
 
         return {ReturnValue};
+    }
+
+    bool CVulkanBackend::CreateAllocator()
+    {
+        VmaAllocatorCreateInfo AllocatorInfo
+        {
+            .flags = 0,
+            .physicalDevice = cContext.cPhysicalDevice,
+            .device = cContext.cDevice,
+            .preferredLargeHeapBlockSize = 0,
+            .pAllocationCallbacks = nullptr,
+            .pDeviceMemoryCallbacks = nullptr,
+            .pHeapSizeLimit = nullptr,
+            .pVulkanFunctions = nullptr,
+            .instance = cContext.cInstance,
+            .vulkanApiVersion = cContext.nAPIVersion,
+            .pTypeExternalMemoryHandleTypes = nullptr
+        };
+
+        if(vmaCreateAllocator(&AllocatorInfo, &cContext.cAllocator) != VK_SUCCESS)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     void CVulkanBackend::GetDeviceExtensionSupport(VkPhysicalDevice cDevice, std::span<const char*> cExtensions, 
@@ -635,6 +721,38 @@ namespace arhi
         return SupportedFeatures & VK_FORMAT_FEATURE_2_COLOR_ATTACHMENT_BIT &&
                 SupportedFeatures & VK_FORMAT_FEATURE_2_TRANSFER_SRC_BIT &&
                 SupportedFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+    }
+
+    VkBufferUsageFlags CVulkanBackend::GetBufferUsageFlags(EBufferFlags::Type eFlags)
+    {
+        VkBufferUsageFlags ReturnValue = 0;
+
+        if(eFlags & EBufferFlags::Vertex)
+        {
+            ReturnValue |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        }
+
+        if(eFlags & EBufferFlags::Index)
+        {
+            ReturnValue |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        }
+
+        if(eFlags & EBufferFlags::Source)
+        {
+            ReturnValue |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        }
+
+        if(eFlags & EBufferFlags::Dest)
+        {
+            ReturnValue |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        }
+
+        if(eFlags & EBufferFlags::Uniform)
+        {
+            ReturnValue |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        }
+
+        return ReturnValue;
     }
 
     bool CVulkanBackend::IsWindowRegistered(PlatformWindowType* Window) const
