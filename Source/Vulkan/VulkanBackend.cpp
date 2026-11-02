@@ -1,6 +1,4 @@
 #include "VulkanBackend.hpp"
-#include "GLFW/glfw3.h"
-#include "PlatformBackend.hpp"
 #include "Types.hpp"
 #include "VulkanTypes.hpp"
 #include "vulkan/vulkan_core.h"
@@ -64,15 +62,15 @@ namespace arhi
 
     }
 
-    void CVulkanBackend::RegisterWindow(PlatformWindowType* Window)
+    void CVulkanBackend::RegisterWindow(PlatformWindowType* pWindow)
     {
-        if(IsWindowRegistered(Window))
+        if(IsWindowRegistered(pWindow))
         {
             return;
         }
 
         vulkan::SWindow WindowInfo{};
-        WindowInfo.pWindow = Window;
+        WindowInfo.pWindow = pWindow;
 
         if(!(PlatformCreateSurface(cContext.cInstance, WindowInfo.pWindow, nullptr, &WindowInfo.cSurface)))
         {
@@ -135,7 +133,7 @@ namespace arhi
         cContext.cWindowList.emplace_back(WindowInfo);
     }
 
-    void CVulkanBackend::DeregisterWindow(GLFWwindow* Window)
+    void CVulkanBackend::DeregisterWindow(PlatformWindowType* pWindow)
     {
 
     }
@@ -260,7 +258,7 @@ namespace arhi
         return {NewBuffer, NewBuffer->nSize};
     }
 
-    CTextureResource CVulkanBackend::AllocTexture(ETextureDimensions eDimensions, ETextureFormat eFormat, const STextureSize &cSize, uint32_t nMips) 
+    CTextureResource CVulkanBackend::AllocTexture(ETextureDimensions eDimensions, ETextureFormat eFormat, const STextureSize& cSize, uint32_t nMips) 
     {
         return {};
     }
@@ -269,22 +267,22 @@ namespace arhi
         return {};
     }
 
-    void CVulkanBackend::UpdateBuffer(const CBufferResource &cResource, uint32_t nOffset, uint32_t nSize, void *pCopyData)
+    void CVulkanBackend::UpdateBuffer(const CBufferResource& cResource, uint32_t nOffset, uint32_t nSize, void* pCopyData)
     {
 
     }
 
-    void CVulkanBackend::UpdateTexture(const CTextureResource &cResource, const STextureOffset &cOffset, const STextureSize &cDataSize, std::span<unsigned char> cData) 
+    void CVulkanBackend::UpdateTexture(const CTextureResource& cResource, const STextureOffset& cOffset, const STextureSize& cDataSize, std::span<unsigned char> cData) 
     {
 
     }
 
-    void CVulkanBackend::UpdateShaderModule(const CShaderResource &cResource, std::span<char> cData) 
+    void CVulkanBackend::UpdateShaderModule(const CShaderResource& cResource, std::span<char> cData) 
     {
 
     }
                                             
-    void CVulkanBackend::DestroyBuffer(CBufferResource *pResource) 
+    void CVulkanBackend::DestroyBuffer(CBufferResource* pResource) 
     {
         if(!pResource || !pResource->GetInternalResource())
         {
@@ -298,12 +296,12 @@ namespace arhi
         *pResource = nullptr;
     }
 
-    void CVulkanBackend::DestroyTexture(CTextureResource *pResource) 
+    void CVulkanBackend::DestroyTexture(CTextureResource* pResource) 
     {
 
     }
 
-    void CVulkanBackend::DestroyShaderModule(CShaderResource *pResource) 
+    void CVulkanBackend::DestroyShaderModule(CShaderResource* pResource) 
     {
 
     }
@@ -532,15 +530,15 @@ namespace arhi
         return true;
     }
 
-    std::optional<vulkan::SSwapchain> CVulkanBackend::CreateSwapchain(vulkan::SWindow& Window)
+    std::optional<vulkan::SSwapchain> CVulkanBackend::CreateSwapchain(vulkan::SWindow& cWindow)
     {
         vulkan::SSwapchain ReturnValue;
 
         VkSurfaceCapabilitiesKHR SurfaceCaps;
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cContext.cPhysicalDevice, Window.cSurface, &SurfaceCaps);
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cContext.cPhysicalDevice, cWindow.cSurface, &SurfaceCaps);
 
         int FBWidth, FBHeight;
-        PlatformGetFramebufferSize(Window.pWindow, &FBWidth, &FBHeight);
+        PlatformGetFramebufferSize(cWindow.pWindow, &FBWidth, &FBHeight);
 
         //TODO? - Better minImageCount selection logic.
         VkSwapchainCreateInfoKHR SwapchainCreateInfo
@@ -548,7 +546,7 @@ namespace arhi
             .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
             .pNext = nullptr,
             .flags = 0,
-            .surface = Window.cSurface,
+            .surface = cWindow.cSurface,
             .minImageCount = SurfaceCaps.maxImageCount >= 3 ? 3 : SurfaceCaps.minImageCount,
             .imageFormat = VK_FORMAT_B8G8R8A8_UNORM,
             .imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
@@ -638,7 +636,7 @@ namespace arhi
     }
 
     void CVulkanBackend::GetDeviceExtensionSupport(VkPhysicalDevice cDevice, std::span<const char*> cExtensions, 
-        vulkan::SDeviceExtensionSupportInfo *pOutSupportInfo)
+        vulkan::SDeviceExtensionSupportInfo* pOutSupportInfo)
     {
         if (pOutSupportInfo)
         {
@@ -675,7 +673,7 @@ namespace arhi
     }
 
     void CVulkanBackend::GetDeviceFeatureSupport(VkPhysicalDevice cDevice, vulkan::SDeviceFeatureRequest& cRequestFeatures,
-        vulkan::SDeviceFeatureSupportInfo *pOutSupportInfo) 
+        vulkan::SDeviceFeatureSupportInfo* pOutSupportInfo) 
     {
         if(!pOutSupportInfo)
         {
@@ -777,9 +775,9 @@ namespace arhi
         }
     }
 
-    void CVulkanBackend::GetDeviceEnabledFeatures(vulkan::SEnabledDeviceFeatureInfo* OutEnabledFeatures)
+    void CVulkanBackend::GetDeviceEnabledFeatures(vulkan::SEnabledDeviceFeatureInfo* pOutEnabledFeatures)
     {
-        VkPhysicalDeviceVulkan14Features& EnabledVk14Features = OutEnabledFeatures->cVk14Features;
+        VkPhysicalDeviceVulkan14Features& EnabledVk14Features = pOutEnabledFeatures->cVk14Features;
         {
             EnabledVk14Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES;
 
@@ -791,7 +789,7 @@ namespace arhi
             }
         }
 
-        VkPhysicalDeviceVulkan13Features& EnabledVk13Features = OutEnabledFeatures->cVk13Features;
+        VkPhysicalDeviceVulkan13Features& EnabledVk13Features = pOutEnabledFeatures->cVk13Features;
         {
             EnabledVk13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
 
@@ -805,7 +803,7 @@ namespace arhi
             EnabledVk13Features.pNext = &EnabledVk14Features;
         }
 
-        VkPhysicalDeviceVulkan12Features& EnabledVk12Features = OutEnabledFeatures->cVk12Features;
+        VkPhysicalDeviceVulkan12Features& EnabledVk12Features = pOutEnabledFeatures->cVk12Features;
         {
             EnabledVk12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 
@@ -819,7 +817,7 @@ namespace arhi
             EnabledVk12Features.pNext = &EnabledVk13Features;
         }
 
-        VkPhysicalDeviceVulkan11Features& EnabledVk11Features = OutEnabledFeatures->cVk11Features;
+        VkPhysicalDeviceVulkan11Features& EnabledVk11Features = pOutEnabledFeatures->cVk11Features;
         {
             EnabledVk11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
 
@@ -833,13 +831,13 @@ namespace arhi
             EnabledVk11Features.pNext = &EnabledVk12Features;
         }
 
-        OutEnabledFeatures->cFeatureList.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        pOutEnabledFeatures->cFeatureList.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 
         //All core 1.0 vulkan features are enabled by default.
         //TODO - (Maybe don't do this idk)
-        vkGetPhysicalDeviceFeatures2(cContext.cPhysicalDevice, &OutEnabledFeatures->cFeatureList);
-        OutEnabledFeatures->cFeatureList.pNext = &EnabledVk11Features;
-        OutEnabledFeatures->pFeatureLink = &EnabledVk14Features.pNext;
+        vkGetPhysicalDeviceFeatures2(cContext.cPhysicalDevice, &pOutEnabledFeatures->cFeatureList);
+        pOutEnabledFeatures->cFeatureList.pNext = &EnabledVk11Features;
+        pOutEnabledFeatures->pFeatureLink = &EnabledVk14Features.pNext;
     }
 
     bool CVulkanBackend::DoesDeviceSupportFormat(VkPhysicalDevice cDevice, VkFormat eFormat) 
@@ -978,11 +976,11 @@ namespace arhi
         return {};
     }
 
-    bool CVulkanBackend::IsWindowRegistered(PlatformWindowType* Window) const
+    bool CVulkanBackend::IsWindowRegistered(PlatformWindowType* pWindow) const
     {
         for(auto& CurrentWindow : cContext.cWindowList)
         {
-            if(CurrentWindow.pWindow == Window)
+            if(CurrentWindow.pWindow == pWindow)
             {
                 return true;
             }
@@ -992,14 +990,14 @@ namespace arhi
     }
 
     uint32_t CVulkanBackend::vkDebugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT eSeverity, VkDebugUtilsMessageTypeFlagsEXT eTypes,
-        const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData) 
+        const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) 
     {
         std::cout << pCallbackData->pMessage << '\n';
         return VK_FALSE;
     }
 
-    VkResult CVulkanBackend::vkCreateDebugUtilsMessengerEXT(VkInstance cInstance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
-        const VkAllocationCallbacks *pAllocator, VkDebugUtilsMessengerEXT *pMessenger) 
+    VkResult CVulkanBackend::vkCreateDebugUtilsMessengerEXT(VkInstance cInstance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
+        const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pMessenger) 
     {
         if(PFN_vkVoidFunction ProcAddress = vkGetInstanceProcAddr(cInstance, "vkCreateDebugUtilsMessengerEXT"))
         {

@@ -21,8 +21,8 @@ namespace arhi
         virtual bool Initialize() override;
         virtual void Shutdown() override;
 
-        void RegisterWindow(PlatformWindowType* Window) override;
-        void DeregisterWindow(PlatformWindowType* Window) override;
+        void RegisterWindow(PlatformWindowType* pWindow) override;
+        void DeregisterWindow(PlatformWindowType* pWindow) override;
 
         virtual void ExecuteFrame() override;
         
