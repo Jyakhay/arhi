@@ -5,6 +5,8 @@
 #include "VulkanTypes.hpp"
 #include "vulkan/vulkan_core.h"
 
+#include <iostream>
+#include <cstdint>
 #include <optional>
 #include <vector>
 #include <array>
@@ -49,6 +51,11 @@ namespace arhi
             return false;
         }
 
+        if(!CreateCommandPool())
+        {
+            return false;
+        }
+
         return true;
     }
 
@@ -81,6 +88,50 @@ namespace arhi
 
         WindowInfo.cSwapchain = SwapchainResult.value();
 
+        //TODO - Move to own bool returning function, on fail destroy allocated objects.
+        WindowInfo.cFrameObjects.insert(WindowInfo.cFrameObjects.begin(), WindowInfo.cSwapchain.cImages.size(), {});
+        for(auto& CurrentFrame : WindowInfo.cFrameObjects)
+        {
+            VkSemaphoreCreateInfo SemaphoreInfo
+            {
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0
+            };
+
+            VkCommandBufferAllocateInfo AllocInfo
+            {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                .pNext = nullptr,
+                .commandPool = cContext.cCommandPool,
+                .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                .commandBufferCount = 1
+            };
+
+            VkFenceCreateInfo FenceInfo
+            {
+                .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = VK_FENCE_CREATE_SIGNALED_BIT
+            };
+
+            if(vkCreateSemaphore(cContext.cDevice, &SemaphoreInfo, nullptr, &CurrentFrame.cPresentSemaphore) != VK_SUCCESS || 
+               vkCreateSemaphore(cContext.cDevice, &SemaphoreInfo, nullptr, &CurrentFrame.cRenderSemaphore) != VK_SUCCESS)
+            {
+                return;
+            }
+
+            if(vkAllocateCommandBuffers(cContext.cDevice, &AllocInfo, &CurrentFrame.cCommandBuffer) != VK_SUCCESS)
+            {
+                return;
+            }
+
+            if(vkCreateFence(cContext.cDevice, &FenceInfo, nullptr, &CurrentFrame.cRenderFence) != VK_SUCCESS)
+            {
+                return;
+            }
+        }
+
         cContext.cWindowList.emplace_back(WindowInfo);
     }
 
@@ -91,7 +142,74 @@ namespace arhi
 
     void CVulkanBackend::ExecuteFrame() 
     {
+        for(size_t i = 0; i < cContext.cWindowList.size(); ++i)
+        {
+            vulkan::SWindow& CurrentWindow = cContext.cWindowList[i];
+            vulkan::SFrameObjects FrameObjects = CurrentWindow.cFrameObjects[CurrentWindow.nCurrentFrame];
 
+            vkWaitForFences(cContext.cDevice, 1, &FrameObjects.cRenderFence, VK_TRUE, UINT32_MAX);
+            vkResetFences(cContext.cDevice, 1, &FrameObjects.cRenderFence);
+            vkAcquireNextImageKHR(cContext.cDevice, CurrentWindow.cSwapchain.cObject, UINT32_MAX, FrameObjects.cPresentSemaphore, nullptr, &CurrentWindow.nActiveImageIndex);
+            
+            VkCommandBufferBeginInfo BeginInfo
+            {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                .pNext = nullptr,
+                .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+                .pInheritanceInfo = nullptr
+            };
+
+            vkBeginCommandBuffer(FrameObjects.cCommandBuffer, &BeginInfo);
+
+            TransitionImage(FrameObjects.cCommandBuffer, CurrentWindow.cSwapchain.cImages[CurrentWindow.nActiveImageIndex], GetTransitionTemplate(vulkan::EImageTransitionTemplate::OutputToTransfer));
+
+            VkImageSubresourceRange Range{
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                0,
+                1,
+                0,
+                1
+            };
+
+            auto Color =VkClearColorValue{{1.0f, 0.0f, 0.0f, 1.0f}};
+            vkCmdClearColorImage(FrameObjects.cCommandBuffer, CurrentWindow.cSwapchain.cImages[CurrentWindow.nActiveImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &Color, 1, &Range);
+
+            TransitionImage(FrameObjects.cCommandBuffer, CurrentWindow.cSwapchain.cImages[CurrentWindow.nActiveImageIndex], GetTransitionTemplate(vulkan::EImageTransitionTemplate::OutputToPresent));
+            
+            vkEndCommandBuffer(FrameObjects.cCommandBuffer);
+
+            VkPipelineStageFlags WaitDestMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            VkSubmitInfo SubmitInfo
+            {
+                .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                .pNext = nullptr,
+                .waitSemaphoreCount = 1,
+                .pWaitSemaphores = &FrameObjects.cPresentSemaphore,
+                .pWaitDstStageMask = &WaitDestMask,
+                .commandBufferCount = 1,
+                .pCommandBuffers = &FrameObjects.cCommandBuffer,
+                .signalSemaphoreCount = 1,
+                .pSignalSemaphores = &FrameObjects.cRenderSemaphore
+            };
+
+            vkQueueSubmit(cContext.cGQueue, 1, &SubmitInfo, FrameObjects.cRenderFence);
+
+            VkPresentInfoKHR PresentInfo
+            {
+                .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                .pNext = nullptr,
+                .waitSemaphoreCount = 1,
+                .pWaitSemaphores = &FrameObjects.cRenderSemaphore,
+                .swapchainCount = 1,
+                .pSwapchains = &CurrentWindow.cSwapchain.cObject,
+                .pImageIndices = &CurrentWindow.nActiveImageIndex,
+                .pResults = nullptr
+            };
+
+            vkQueuePresentKHR(cContext.cGQueue, &PresentInfo);
+
+            CurrentWindow.nCurrentFrame = (CurrentWindow.nCurrentFrame + 1) % CurrentWindow.cFrameObjects.size();
+        }
     }
 
     CBufferResource CVulkanBackend::AllocBuffer(uint32_t nSize, EBufferFlags::Type eFlags) 
@@ -396,6 +514,24 @@ namespace arhi
         return true;
     }
 
+    bool CVulkanBackend::CreateCommandPool()
+    {
+        VkCommandPoolCreateInfo PoolInfo
+        {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+            .queueFamilyIndex = cContext.nGQueueIndex
+        };
+
+        if(vkCreateCommandPool(cContext.cDevice, &PoolInfo, nullptr, &cContext.cCommandPool) != VK_SUCCESS)
+        {
+            return false;
+        }  
+
+        return true;
+    }
+
     std::optional<vulkan::SSwapchain> CVulkanBackend::CreateSwapchain(vulkan::SWindow& Window)
     {
         vulkan::SSwapchain ReturnValue;
@@ -418,7 +554,7 @@ namespace arhi
             .imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
             .imageExtent = VkExtent2D{.width = static_cast<uint32_t>(FBWidth), .height = static_cast<uint32_t>(FBHeight)},
             .imageArrayLayers = 1,
-            .imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            .imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
             .queueFamilyIndexCount = 0,
             .pQueueFamilyIndices = nullptr,
@@ -429,16 +565,16 @@ namespace arhi
             .oldSwapchain = nullptr
         };
 
-        if(vkCreateSwapchainKHR(cContext.cDevice, &SwapchainCreateInfo, nullptr, &Window.cSwapchain.cObject) != VK_SUCCESS)
+        if(vkCreateSwapchainKHR(cContext.cDevice, &SwapchainCreateInfo, nullptr, &ReturnValue.cObject) != VK_SUCCESS)
         {
             return {};
         }
 
         uint32_t ImageCount;
-        vkGetSwapchainImagesKHR(cContext.cDevice, Window.cSwapchain.cObject, &ImageCount, nullptr);
-        Window.cSwapchain.cImages.insert(Window.cSwapchain.cImages.begin(), ImageCount, nullptr);
-        vkGetSwapchainImagesKHR(cContext.cDevice, Window.cSwapchain.cObject, &ImageCount, Window.cSwapchain.cImages.data());
-        Window.cSwapchain.cViews.insert(Window.cSwapchain.cViews.begin(), ImageCount, nullptr);
+        vkGetSwapchainImagesKHR(cContext.cDevice, ReturnValue.cObject, &ImageCount, nullptr);
+        ReturnValue.cImages.insert(ReturnValue.cImages.begin(), ImageCount, nullptr);
+        vkGetSwapchainImagesKHR(cContext.cDevice, ReturnValue.cObject, &ImageCount, ReturnValue.cImages.data());
+        ReturnValue.cViews.insert(ReturnValue.cViews.begin(), ImageCount, nullptr);
 
         VkImageSubresourceRange ImageViewRange
         {
@@ -463,8 +599,8 @@ namespace arhi
 
         for(uint32_t i = 0; i < ImageCount; ++i)
         {
-            ImageViewInfo.image = Window.cSwapchain.cImages[i];
-            if(vkCreateImageView(cContext.cDevice, &ImageViewInfo, nullptr, &Window.cSwapchain.cViews[i]) != VK_SUCCESS)
+            ImageViewInfo.image = ReturnValue.cImages[i];
+            if(vkCreateImageView(cContext.cDevice, &ImageViewInfo, nullptr, &ReturnValue.cViews[i]) != VK_SUCCESS)
             {
                 return {};
             }
@@ -755,6 +891,93 @@ namespace arhi
         return ReturnValue;
     }
 
+    void CVulkanBackend::TransitionImage(VkCommandBuffer cBuffer, VkImage cImage, const vulkan::STransitionInfo& cTransitionInfo)
+    {
+        VkImageSubresourceRange SubresourceRange
+        {
+            .aspectMask = cTransitionInfo.eAspect,
+            .baseMipLevel = cTransitionInfo.nMipLevel,
+            .levelCount = cTransitionInfo.nNumMips,
+            .baseArrayLayer = cTransitionInfo.nLayer,
+            .layerCount = cTransitionInfo.nNumLayers
+        };
+
+        VkImageMemoryBarrier2 ImageBarrier
+        {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .pNext = nullptr,
+            .srcStageMask = cTransitionInfo.eSrcStage,
+            .srcAccessMask = cTransitionInfo.eSrcAccess,
+            .dstStageMask = cTransitionInfo.eDstStage,
+            .dstAccessMask = cTransitionInfo.eDstAccess,
+            .oldLayout = cTransitionInfo.eOldLayout,
+            .newLayout = cTransitionInfo.eNewLayout,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = cImage,
+            .subresourceRange = SubresourceRange
+        };
+
+        VkDependencyInfo DependencyInfo
+        {
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .pNext = nullptr,
+            .dependencyFlags = 0,
+            .memoryBarrierCount = 0,
+            .pMemoryBarriers = nullptr,
+            .bufferMemoryBarrierCount = 0,
+            .pBufferMemoryBarriers = nullptr,
+            .imageMemoryBarrierCount = 1,
+            .pImageMemoryBarriers = &ImageBarrier
+        };
+
+        vkCmdPipelineBarrier2(cBuffer, &DependencyInfo);
+    }
+
+    vulkan::STransitionInfo CVulkanBackend::GetTransitionTemplate(vulkan::EImageTransitionTemplate eTemplate)
+    {
+        vulkan::STransitionInfo ReturnValue;
+        
+        switch(eTemplate)
+        {
+            case vulkan::EImageTransitionTemplate::OutputToTransfer:
+            {
+                ReturnValue.eAspect = VK_IMAGE_ASPECT_COLOR_BIT;
+                ReturnValue.nLayer = 0;
+                ReturnValue.nNumLayers = 1;
+                ReturnValue.nMipLevel = 0;
+                ReturnValue.nNumMips = 1;
+                ReturnValue.eOldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                ReturnValue.eNewLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                ReturnValue.eSrcStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+                ReturnValue.eSrcAccess = 0;
+                ReturnValue.eDstStage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+                ReturnValue.eDstAccess = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+
+                return ReturnValue;
+            }
+
+            case vulkan::EImageTransitionTemplate::OutputToPresent:
+            {
+                ReturnValue.eAspect = VK_IMAGE_ASPECT_COLOR_BIT;
+                ReturnValue.nLayer = 0;
+                ReturnValue.nNumLayers = 1;
+                ReturnValue.nMipLevel = 0;
+                ReturnValue.nNumMips = 1;
+                ReturnValue.eOldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                ReturnValue.eNewLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+                ReturnValue.eSrcStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+                ReturnValue.eSrcAccess = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+                ReturnValue.eDstStage = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
+                ReturnValue.eDstAccess = 0;
+
+                return ReturnValue;
+            }
+        }
+
+        return {};
+    }
+
     bool CVulkanBackend::IsWindowRegistered(PlatformWindowType* Window) const
     {
         for(auto& CurrentWindow : cContext.cWindowList)
@@ -771,6 +994,7 @@ namespace arhi
     uint32_t CVulkanBackend::vkDebugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT eSeverity, VkDebugUtilsMessageTypeFlagsEXT eTypes,
         const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData) 
     {
+        std::cout << pCallbackData->pMessage << '\n';
         return VK_FALSE;
     }
 

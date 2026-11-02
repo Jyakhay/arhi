@@ -20,6 +20,8 @@ int main()
     while(!glfwWindowShouldClose(Window))
     {
         glfwPollEvents();
+
+        Backend->ExecuteFrame();
     }
 
     Backend->DeregisterWindow(Window);

@@ -8,6 +8,7 @@
 #include "Types.hpp"
 #include "PlatformBackend.hpp"
 #include "VulkanFeatures.hpp"
+#include "vulkan/vulkan_core.h"
 
 namespace arhi::vulkan
 {
@@ -67,16 +68,48 @@ namespace arhi::vulkan
         VkExtent2D cExtent;
     };
 
+    struct SFrameObjects
+    {
+        VkFence cRenderFence = nullptr;
+        VkSemaphore cRenderSemaphore = nullptr;
+        VkSemaphore cPresentSemaphore = nullptr;
+        VkCommandBuffer cCommandBuffer = nullptr;
+    }; 
+
     struct SWindow
     {
         SSwapchain cSwapchain;
         PlatformWindowType* pWindow = nullptr;
         VkSurfaceKHR cSurface = nullptr;
+
+        std::vector<SFrameObjects> cFrameObjects;
+        uint32_t nActiveImageIndex = UINT32_MAX;
+        uint32_t nCurrentFrame = 0;
+    };
+
+    struct STransitionInfo
+    {
+        VkImageLayout eOldLayout;
+        VkImageLayout eNewLayout;
+        VkImageAspectFlags eAspect;
+        uint32_t nNumMips;
+        uint32_t nMipLevel;
+        uint32_t nNumLayers;
+        uint32_t nLayer;
+        VkPipelineStageFlags2 eSrcStage;
+        VkAccessFlags2 eSrcAccess;
+        VkPipelineStageFlags2 eDstStage;
+        VkAccessFlags2 eDstAccess;
+    };
+
+    enum class EImageTransitionTemplate
+    {
+        OutputToTransfer,
+        OutputToPresent
     };
 
     struct SContext
     {
-
         uint32_t nAPIVersion = 0;
         VkInstance cInstance = nullptr;
         VkDebugUtilsMessengerEXT cDebugMessenger = nullptr;
@@ -85,8 +118,8 @@ namespace arhi::vulkan
         VkQueue cGQueue = nullptr;
         uint32_t nGQueueIndex = 0;
         std::vector<SWindow> cWindowList;
+        VkCommandPool cCommandPool = nullptr;
         VmaAllocator cAllocator = nullptr;
-
     };  
 
 }

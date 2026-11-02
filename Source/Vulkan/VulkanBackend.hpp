@@ -51,17 +51,20 @@ namespace arhi
         bool SelectPhysicalDevice();
         bool SelectGraphicsQueueFamily();
         bool CreateVulkanDevice();
-        std::optional<vulkan::SSwapchain> CreateSwapchain(vulkan::SWindow& Window);
+        bool CreateCommandPool();
+        std::optional<vulkan::SSwapchain> CreateSwapchain(vulkan::SWindow& cWindow);
         bool CreateAllocator();
 
         /*--------Helper Functions--------*/
         static void GetDeviceExtensionSupport(VkPhysicalDevice cDevice, std::span<const char*> cExtensions, vulkan::SDeviceExtensionSupportInfo* pOutSupportInfo);
         static void GetDeviceFeatureSupport(VkPhysicalDevice cDevice, vulkan::SDeviceFeatureRequest& cRequestFeatures, vulkan::SDeviceFeatureSupportInfo* pOutSupportInfo);
-        void GetDeviceEnabledFeatures(vulkan::SEnabledDeviceFeatureInfo* OutEnabledFeatures);
+        void GetDeviceEnabledFeatures(vulkan::SEnabledDeviceFeatureInfo* pOutEnabledFeatures);
         static bool DoesDeviceSupportFormat(VkPhysicalDevice cDevice, VkFormat eFormat);
         static VkBufferUsageFlags GetBufferUsageFlags(EBufferFlags::Type eFlags);
+        static void TransitionImage(VkCommandBuffer cBuffer, VkImage cImage, const vulkan::STransitionInfo& cTransitionInfo);
+        static vulkan::STransitionInfo GetTransitionTemplate(vulkan::EImageTransitionTemplate eTemplate);
 
-        bool IsWindowRegistered(PlatformWindowType* Window) const;
+        bool IsWindowRegistered(PlatformWindowType* pWindow) const;
 
         /*--------Vulkan Callbacks--------*/
 
@@ -77,7 +80,12 @@ namespace arhi
         };
         std::vector<vulkan::features::EVulkan11Feature> cEnabledVk11Features;
         std::vector<vulkan::features::EVulkan12Feature> cEnabledVk12Features;
-        std::vector<vulkan::features::EVulkan13Feature> cEnabledVk13Features;
+
+        std::vector<vulkan::features::EVulkan13Feature> cEnabledVk13Features = 
+        {
+            vulkan::features::EVulkan13Feature::SYNCHRONIZATION_2
+        };
+
         std::vector<vulkan::features::EVulkan14Feature> cEnabledVk14Features;
 
     };
